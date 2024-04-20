@@ -1,0 +1,39 @@
+trigger:
+- none
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+- task: AzureCLI@2
+  displayName: 'Deploy Resource Group'
+  inputs:
+    azureSubscription: 'ADO-Blogging-SvcCon'
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+      rgOutput=$(az deployment sub create \
+        --name iac-demo-resource-group-deployment \
+        --location centralus \
+        --template-file ./bicep/iac-demo-rg.bicep)
+      rgName=$(echo $rgOutput | jq -r '.properties.outputs.resourceGroupName.value')
+      rgLocation=$(echo $rgOutput | jq -r '.properties.outputs.resourceGroupLocation.value')
+      rgTags=$(echo $rgOutput | jq -r '.properties.outputs.resourceGroupTags.value' | jq -c .)
+      echo "##vso[task.setvariable variable=rgName]$rgName"
+      echo "##vso[task.setvariable variable=rgLocation]$rgLocation"
+      echo "##vso[task.setvariable variable=rgTags]$rgTags"
+      echo "rgName is set to to $rgName"
+      echo "rgLocation is set to $rgLocation"
+      echo "rgTags is set to $rgTags"
+- task: AzureCLI@2
+  displayName: 'Deploy Vnet and VM'
+  inputs:
+    azureSubscription: 'ADO-Blogging-SvcCon'
+    scriptType: 'bash'
+    scriptLocation: 'inlineScript'
+    inlineScript: |
+      az deployment group create \
+        --name iac-demo-resources-deployment \
+        --resource-group $(rgName) \
+        --template-file ./bicep/iac-demo-vm.bicep \
+        --parameters vmName=iac-demo-vm location=$(rgLocation) tags='$(rgTags)'
